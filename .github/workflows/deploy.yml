@@ -16,6 +16,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Check if Secrets Exist
+        run: |
+          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
+            echo "SECRET IS PRESENT AND ACCESSIBLE"
+          else
+            echo "SECRET IS EMPTY OR BLOCKED"
+          fi
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,7 +39,7 @@ jobs:
       - name: Build and Push Ingress API Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ecommerce-lambda-v2
+          ECR_REPOSITORY: ingress-api
           IMAGE_TAG: latest
         working-directory: ./services/ingress-api
         run: |
