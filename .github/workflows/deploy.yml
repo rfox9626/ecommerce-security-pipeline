@@ -1,12 +1,8 @@
-name: Deploy E-Commerce Security Pipeline
+name: Deploy E-Commerce Pipeline
 
 on:
   push:
-    branches: [ "main" ]
-
-permissions:
-  id-token: write
-  contents: read
+    branches: [ main ]
 
 jobs:
   deploy:
@@ -16,14 +12,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check if Secrets Exist
-        run: |
-          if [ -n "${{ secrets.AWS_ACCESS_KEY_ID }}" ]; then
-            echo "SECRET IS PRESENT AND ACCESSIBLE"
-          else
-            echo "SECRET IS EMPTY OR BLOCKED"
-          fi
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -31,7 +19,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      # --- RUN TERRAFORM TO PROVISION INFRASTRUCTURE ---
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
@@ -39,26 +26,26 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      - name: Terraform Apply
+      # --- PASS 1: BUILD ALL INFRASTRUCTURE & ECR (EXCLUDING LAMBDAS) ---
+      - name: Terraform Apply (Infrastructure Only)
         working-directory: ./terraform
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve -exclude=aws_lambda_function.api_ingress -exclude=aws_lambda_function.queue_worker
 
+      # --- PASS 2: LOGIN TO ECR & PUSH DOCKER IMAGES ---
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --- 1. BUILD & PUSH GO INGRESS API ---
       - name: Build and Push Ingress API Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ingress-api
+          ECR_REPOSITORY: ecommerce-lambda-v2
           IMAGE_TAG: latest
         working-directory: ./services/ingress-api
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # --- 2. BUILD & PUSH PYTHON WORKER ---
       - name: Build and Push Worker Processor Docker Image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -69,14 +56,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # --- 3. TERRAFORM PROVISIONING ---
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        working-directory: ./terraform
-        run: terraform init
-
-      - name: Terraform Apply
+      # --- PASS 3: FULL APPLY (NOW CREATES THE LAMBDAS USING THE NEW IMAGES) ---
+      - name: Terraform Apply (Create Lambdas & Final Wiring)
         working-directory: ./terraform
         run: terraform apply -auto-approve
