@@ -34,11 +34,11 @@ resource "aws_iam_role_policy" "lambda_dynamodb_policy" {
   })
 }
 
-data "aws_ecr_repository" "api_repo" {
+resource "aws_ecr_repository" "api_repo" {
   name = "ecommerce-lambda-v2"
 }
 
-data "aws_ecr_repository" "handler_repo" {
+resource "aws_ecr_repository" "handler_repo" {
   name = "sqs-redis-handler-v2"
 }
 
@@ -46,7 +46,7 @@ resource "aws_lambda_function" "api_ingress" {
   function_name = "ecommerce-ingest-api"
   role          = aws_iam_role.lambda_execution_role.arn
   package_type  = "Image"
-  image_uri     = "${data.aws_ecr_repository.api_repo.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.api_repo.repository_url}:latest"
   timeout       = 30
 
   vpc_config {
@@ -66,7 +66,7 @@ resource "aws_lambda_function" "queue_worker" {
   function_name = "ecommerce-sqs-redis-worker"
   role          = aws_iam_role.lambda_execution_role.arn
   package_type  = "Image"
-  image_uri     = "${data.aws_ecr_repository.handler_repo.repository_url}:latest"
+  image_uri     = "${aws_ecr_repository.handler_repo.repository_url}:latest"
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_az1_net.id, aws_subnet.private_az2_net.id]
