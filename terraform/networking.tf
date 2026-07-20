@@ -9,12 +9,14 @@ resource "aws_subnet" "private_az1_net" {
   vpc_id     = aws_vpc.ecommerce_vpc_core.id
   cidr_block = "10.1.1.0/24"
   tags       = { Name = "ecommerce-private-az1" }
+  availability_zone = "us-east-1a"  # Explicit AZ 1
 }
 
 resource "aws_subnet" "private_az2_net" {
   vpc_id     = aws_vpc.ecommerce_vpc_core.id
   cidr_block = "10.1.2.0/24"
   tags       = { Name = "ecommerce-private-az2" }
+  availability_zone = "us-east-1b"  # Explicit different AZ 2
 }
 
 data "aws_region" "current" {}
