@@ -26,10 +26,21 @@ jobs:
         working-directory: ./terraform
         run: terraform init
 
-      # --- PASS 1: BUILD ALL INFRASTRUCTURE & ECR (EXCLUDING LAMBDAS) ---
-      - name: Terraform Apply (Infrastructure Only)
+      # --- PASS 1: BUILD CORE INFRASTRUCTURE & ECR REPOS ONLY ---
+      - name: Terraform Apply (Infrastructure & ECR Target)
         working-directory: ./terraform
-        run: terraform apply -auto-approve -exclude=aws_lambda_function.api_ingress -exclude=aws_lambda_function.queue_worker
+        run: |
+          terraform apply -auto-approve \
+            -target=aws_vpc.ecommerce_vpc_core \
+            -target=aws_subnet.private_az1_net \
+            -target=aws_subnet.private_az2_net \
+            -target=aws_sqs_queue.order_queue \
+            -target=aws_dynamodb_table.transactions_store \
+            -target=aws_ecr_repository.api_repo \
+            -target=aws_ecr_repository.handler_repo \
+            -target=aws_apigatewayv2_api.http_api \
+            -target=aws_elasticache_serverless_cache.redis_store \
+            -target=aws_iam_role.lambda_execution_role
 
       # --- PASS 2: LOGIN TO ECR & PUSH DOCKER IMAGES ---
       - name: Login to Amazon ECR
@@ -56,7 +67,7 @@ jobs:
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      # --- PASS 3: FULL APPLY (NOW CREATES THE LAMBDAS USING THE NEW IMAGES) ---
-      - name: Terraform Apply (Create Lambdas & Final Wiring)
+      # --- PASS 3: FULL APPLY (CREATES LAMBDAS & WIRES EVERYTHING UP) ---
+      - name: Terraform Apply (Final Stack)
         working-directory: ./terraform
         run: terraform apply -auto-approve
