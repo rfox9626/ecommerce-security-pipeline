@@ -1,8 +1,9 @@
+# Defines the security group regulating firewall traffic rules for the Lambda execution environments
 resource "aws_security_group" "lambda_sg_sec" {
   name   = "ecommerce-lambda-security-group"
   vpc_id = aws_vpc.ecommerce_vpc_core.id
 
-  # Allow inbound HTTPS for the SQS VPC Endpoint (and other AWS APIs)
+  # Permits inbound HTTPS traffic internally for SQS VPC endpoints and AWS service APIs
   ingress {
     from_port   = 443
     to_port     = 443
@@ -10,7 +11,7 @@ resource "aws_security_group" "lambda_sg_sec" {
     self        = true
   }
 
-  # Allow inbound Redis traffic for ElastiCache
+  # Permits inbound Redis traffic communication channels internally
   ingress {
     from_port   = 6379
     to_port     = 6379
@@ -18,7 +19,7 @@ resource "aws_security_group" "lambda_sg_sec" {
     self        = true
   }
 
-  # Allow all outbound traffic to talk to endpoints and the internet/AWS services
+  # Allows all outbound traffic from the Lambda functions to reach external endpoints or the internet
   egress {
     from_port   = 0
     to_port     = 0
@@ -27,11 +28,12 @@ resource "aws_security_group" "lambda_sg_sec" {
   }
 }
 
+# Defines a dedicated security group isolating the ElastiCache Redis cluster perimeter
 resource "aws_security_group" "redis_sg_sec" {
   name   = "ecommerce-redis-security-group"
   vpc_id = aws_vpc.ecommerce_vpc_core.id
 
-  # Allow inbound Redis traffic from our Lambda functions
+  # Restricts incoming Redis queries to accept traffic exclusively from the Lambda security group
   ingress {
     from_port       = 6379
     to_port         = 6379
@@ -47,6 +49,7 @@ resource "aws_security_group" "redis_sg_sec" {
   }
 }
 
+# Explicit egress rule allowing Lambda to communicate with the Redis data store on port 6379
 resource "aws_security_group_rule" "lambda_to_redis" {
   type                     = "egress"
   from_port                = 6379
@@ -56,6 +59,7 @@ resource "aws_security_group_rule" "lambda_to_redis" {
   source_security_group_id = aws_security_group.redis_sg_sec.id
 }
 
+# Explicit egress rule allowing Lambda to reach the SQS interface endpoint over HTTPS
 resource "aws_security_group_rule" "lambda_egress_to_sqs" {
   type                     = "egress"
   from_port                = 443
@@ -65,6 +69,7 @@ resource "aws_security_group_rule" "lambda_egress_to_sqs" {
   source_security_group_id = aws_security_group.lambda_sg_sec.id
 }
 
+# General HTTPS egress rule for broader internet or external service connectivity
 resource "aws_security_group_rule" "lambda_egress_https" {
   type              = "egress"
   from_port         = 443
@@ -74,6 +79,7 @@ resource "aws_security_group_rule" "lambda_egress_https" {
   security_group_id = aws_security_group.lambda_sg_sec.id
 }
 
+# Ingress rule handling secure communication back through the SQS VPC endpoint
 resource "aws_security_group_rule" "sqs_endpoint_ingress_https" {
   type                     = "ingress"
   from_port                = 443
@@ -83,6 +89,7 @@ resource "aws_security_group_rule" "sqs_endpoint_ingress_https" {
   source_security_group_id = aws_security_group.lambda_sg_sec.id
 }
 
+# Ingress rule permitting Redis connections originating from authorized Lambda instances
 resource "aws_security_group_rule" "redis_ingress_from_lambda" {
   type                     = "ingress"
   from_port                = 6379

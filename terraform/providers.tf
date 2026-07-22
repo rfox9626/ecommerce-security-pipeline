@@ -1,3 +1,4 @@
+# Sets base constraints for the Terraform execution binary and required external providers
 terraform {
   required_version = ">= 1.0.0"
   required_providers {
@@ -8,6 +9,7 @@ terraform {
   }
 }
 
+# Configures the core AWS provider region to Ohio (us-east-2)
 provider "aws" {
   region = "us-east-2"
 }
