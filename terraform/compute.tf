@@ -67,6 +67,7 @@ resource "aws_lambda_function" "queue_worker" {
   role          = aws_iam_role.lambda_execution_role.arn
   package_type  = "Image"
   image_uri     = "${aws_ecr_repository.handler_repo.repository_url}:latest"
+  timeout       = 30
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_az1_net.id, aws_subnet.private_az2_net.id]
@@ -76,6 +77,7 @@ resource "aws_lambda_function" "queue_worker" {
   environment {
     variables = {
       REDIS_HOST = aws_elasticache_serverless_cache.redis_store.endpoint[0].address
+      REDIS_PORT = 6379
     }
   }
 }
@@ -84,4 +86,19 @@ resource "aws_lambda_event_source_mapping" "sqs_to_lambda" {
   event_source_arn = aws_sqs_queue.order_queue.arn
   function_name    = aws_lambda_function.queue_worker.arn
   batch_size       = 1
+}
+
+resource "aws_iam_policy" "lambda_sqs_policy" {
+  name = "ecommerce-lambda-sqs-policy"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = ["sqs:SendMessage", "sqs:GetQueueAttributes"]
+        Resource = aws_sqs_queue.order_queue.arn
+      }
+    ]
+  })
 }

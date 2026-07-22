@@ -75,7 +75,7 @@ func initSQS() (*SQSClient, error) {
 
 	// Loads AWS configuration automatically from the Lambda IAM runtime execution role
 	cfg, err := config.LoadDefaultConfig(context.Background(),
-		config.WithRegion("us-east-1"),
+		config.WithRegion("us-east-2"),
 	)
 
 	if err != nil {

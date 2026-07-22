@@ -7,22 +7,52 @@ import redis
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-2")
+
+# Strip out any port if it was accidentally included in REDIS_HOST
+raw_redis_host = os.environ.get("REDIS_HOST", "localhost")
+if ":" in raw_redis_host:
+    REDIS_HOST, parsed_port = raw_redis_host.rsplit(":", 1)
+    REDIS_PORT = int(parsed_port)
+else:
+    REDIS_HOST = raw_redis_host
 
 # 1. Initialize DynamoDB client outside handler to reuse connections across warm starts
-dynamodb = boto3.resource("dynamodb", region_name="us-east-1")
-table = dynamodb.Table("ecommerce-transactions-fresh")
+dynamodb = boto3.resource("dynamodb", region_name=AWS_REGION)
+table = dynamodb.Table("ecommerce-transactions-prod")
+_redis_pool = None
 
-# 2. Establish a connection pool (highly recommended for Lambda performance)
-redis_pool = redis.ConnectionPool(
-    host=REDIS_HOST,
-    port=REDIS_PORT,
-    db=0,
-    decode_responses=True,  # Automatically decodes Redis bytes into Python strings
-)
-
+def get_redis_pool():
+    global _redis_pool
+    if _redis_pool is None:
+        _redis_pool = redis.ConnectionPool(
+            host=REDIS_HOST,
+            port=REDIS_PORT,
+            connection_class=redis.SSLConnection,
+            ssl_cert_reqs=None,
+            db=0,
+            decode_responses=True,
+            socket_timeout=5.0,
+            socket_connect_timeout=5.0,
+        )
+    return _redis_pool
 
 def lambda_handler(event, context):
-    r = redis.Redis(connection_pool=redis_pool)
+    print(f"Attempting to connect to Redis at {REDIS_HOST}:{REDIS_PORT} (SSL: True)...")
+ 
+    # Initialize connection inside handler scope
+    r = redis.Redis(connection_pool=get_redis_pool())
+
+    # Quick debug dump of Redis keys
+    try:
+        ip_val = r.get("fail:ip:192.168.1.1")
+        user_val = r.get("fail:user_id:user-456")
+        ip_ttl = r.ttl("fail:ip:192.168.1.1")
+        user_ttl = r.ttl("fail:user_id:user-456")
+        print(f"DEBUG -> fail:ip:192.168.1.1 = {ip_val} (TTL: {ip_ttl})")
+        print(f"DEBUG -> fail:user_id:user-456 = {user_val} (TTL: {user_ttl})")
+    except Exception as e:
+        print(f"Failed to fetch Redis keys: {e}")
 
     # This list will hold the IDs of messages that failed to process
     failed_message_ids = []
